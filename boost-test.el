@@ -24,13 +24,28 @@
 
 ;;(eval-when-compile (require 'cl))
 
+(defun process--result(test result)
+  (let ((buf (get-buffer-create (concat "test results for: " (process-name test))))
+		(xml (concat "<Result>" result "</Result>")))
+	(message "%s" xml)
+	(set-buffer buf)
+	(erase-buffer)
+	(insert xml)
+	(let ((root (xml-parse-region (point-min) (point-max))))
+	  (message "%s" (car root))
+	  (switch-to-buffer buf))))
+;;	(let ((root (xml-parse-region (point-min) (point-max))))
+;;	  (erase-buffer)
+;;	  (message "%s" root))))
+;;	  (switch-to-buffer buf))))
+
+
 (defun boost-test-run ()
   "Runs the test specified"
   (interactive)
-  (let ((test (read-file-name "Test program:"))
-		(buf (get-buffer-create "test results")))
+  (let ((test-prog (read-file-name "Test program:")))
+	(let ((proc (start-process test-prog nil test-prog "--output_format=XML --log_level=test_suite")))
 
-	(start-process "Boost.Test" buf test "--report_format=XML")
-	(switch-to-buffer buf)))
+	  (set-process-filter proc 'process--result))))
 
 (provide 'boost-test)
