@@ -108,31 +108,24 @@
   "Parse the TestResult part of the xml"
 
   (when (listp node)
+	(setq fill-column 60)
     (let ((root (car (xml-get-children node 'TestSuite)))
           (attr (xml-node-attributes (car (xml-get-children node 'TestSuite))))
           (attr-count 0))
 
       (insert (format "|%s|\n" (make-string 60 ?-)))
-      (insert (format "| %s %S result summary:\n" (car root) (cdr (assq 'name attr))))
-      (insert (format "|%s|\n" (make-string 60 ?-)))
+      (insert (format "%s %S result summary:" (car root) (cdr (assq 'name attr))))
+	  (center-line)
+      (insert (format "\n|%s|\n" (make-string 60 ?-)))
 
-        (insert (format "| %-20s | %-35s |\n" "name" (cdr (assq 'name attr))))
-        (insert (format "| %-20s | %-35s |\n" "result" (cdr (assq 'result attr))))
-        (insert (format "| %-20s | %-35s |\n" "assertions_passed" (cdr (assq 'assertions_passed attr))))
-        (insert (format "| %-20s | %-35s |\n" "assertions_failed" (cdr (assq 'assertions_passed attr))))
-        (insert (format "| %-20s | %-35s |\n" "expected_failures" (cdr (assq 'expected_failures attr))))
-        (insert (format "| %-20s | %-35s |\n" "test_cases_passed" (cdr (assq 'test_cases_passed attr))))
-        (insert (format "| %-20s | %-35s |\n" "test_cases_failed" (cdr (assq 'test_cases_failed attr))))
-        (insert (format "| %-20s | %-35s |\n" "test_cases_skipped" (cdr (assq 'test_cases_skipped attr))))
-        (insert (format "| %-20s | %-35s |\n" "test_cases_aborted" (cdr (assq 'test_cases_aborted attr))))
-
-        ;; (insert "\n")
-
-        ;; (while (< attr-count (length (xml-node-attributes root)))
-        ;;   (insert (format "| %-20s | %-35s |\n"
-        ;;                 (car (elt attr attr-count))
-        ;;                 (cdr (elt attr attr-count))))
-        ;;   (setq attr-count (1+ attr-count)))
+        (while (< attr-count (length (xml-node-attributes root)))
+		  (let ((identifier (car (elt attr attr-count)))
+				(value (cdr (elt attr attr-count))))
+			(cond ((string= "name" identifier) nil)
+				  (t (insert (format "| %-20s | %-35s |\n"
+									 (format "%s:" identifier)
+									 value))))
+			(setq attr-count (1+ attr-count))))
 
       (insert (format "|%s|\n" (make-string 60 ?-))))))
 
