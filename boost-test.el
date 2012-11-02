@@ -24,6 +24,18 @@
 
 (eval-when-compile (require 'cl))
 
+(defface boost-test-error-face '((t (:foreground "red" :bold t)))
+  "*Face used to highlight errors or failures..."
+  :group 'Boost.Test :group 'Convenience :group 'Help :group 'faces)
+
+(defface boost-test-success-face '((t (:foreground "green")))
+  "*Face used to highlight successful conditions..."
+  :group 'Boost.Test :group 'Convenience :group 'Help :group 'faces)
+
+(defface boost-test-common-face '((t (:inherit 'font-lock-variable-name-face)))
+  "*Face used to highlight non-specific stuff..."
+  :group 'Boost.Test :group 'Convenience :group 'Help :group 'faces)
+
 (defvar boost-test-mode-hook nil)
 
 (defvar boost-test-program nil)
@@ -49,7 +61,7 @@
         (buf (get-buffer-create (generate-new-buffer-name "*test-result*"))))
 
     (setq default-directory (file-name-directory test-prog))
-;;  (let ((proc (start-process test-prog buf test-prog "--output_format=XML --log_level=test_suite")))
+
     (let ((proc (start-process test-prog buf test-prog "--output_format=XML --log_level=all --repor_level=detailed")))
       (let ((sentinel (lambda (process signal)
                         (unwind-protect
@@ -74,6 +86,8 @@
     (set-buffer buf)
     (erase-buffer)
 
+    (insert (format "%s\n\n" test_log))
+
     (boost-test--parse-log-node test_log buf)
     (insert "\n")
     (boost-test--parse-result-node test_result buf)
@@ -89,17 +103,53 @@
 
                         (cond ((string= "TestLog" elem) nil)
 
+                              ((string= "Exception" elem) (let ((attr (xml-node-attributes node)))
+                                                            (when (stringp (car (last node)))
+                                                              (insert (propertize (format "%s: " elem)
+                                                                                  'face 'boost-test-error-face))
+                                                              (insert (format "%s "(car (last node))))
+                                                              (insert (format "[%s:%s:]\n"
+                                                                              (cdr (assq 'file attr))
+                                                                              (cdr (assq 'line attr)))))
+                                                            (when (listp (car (last node)))
+                                                              (insert (propertize (format "%s: " elem)
+                                                                                  'face 'boost-test-error-face))
+                                                              (insert (format "%s "(cdr (last node))))
+                                                              (insert (format "[%s:%s:]\n"
+                                                                              (cdr (assq 'file attr))
+                                                                              (cdr (assq 'line attr)))))))
+
                               ((string= "FatalError" elem) (let ((attr (xml-node-attributes node)))
-                                                             (insert (format "%s: " elem))
+                                                             (insert (propertize (format "%s: " elem)
+                                                                                 'face 'boost-test-error-face))
+                                                             (insert (propertize (format "%s "(car (last node)))
+                                                                     'face 'boost-test-common-face))
+                                                             (insert (propertize (format "[%s:%s]\n"
+                                                                                         (cdr (assq 'file attr))
+                                                                                         (cdr (assq 'line attr)))
+                                                                                 'face 'boost-test-common-face))))
+
+
+                              ((string= "LastCheckpoint" elem) (let ((attr (xml-node-attributes node)))
+                                                                 (insert (propertize (format "%s: " elem)
+                                                                                 'face 'font-lock-type-face))
                                                              (insert (format "%s "(car (last node))))
-                                                             (insert (format "[%s:%s:]\n"
+                                                             (insert (format "[%s:%s]\n"
                                                                              (cdr (assq 'file attr))
                                                                              (cdr (assq 'line attr))))))
 
-                              (t (cond ((stringp (car (last node))) (insert
-                                                                     (format "%s: %s\n" elem (car (last node)))))
-                                       (t (let ((attr (xml-node-attributes node)))
-                                            (insert (format "%s: %s\n" elem (cdr (assq 'name attr)))))))))
+                              (t (cond ((stringp (car (last node)))
+                                        (insert (propertize (format "%s: " elem)
+                                                            'face 'font-lock-type-face))
+                                        (insert (propertize (format "%s\n" (car (last node)))
+                                                            'face 'boost-test-common-face)))
+                                       (t
+                                        (let ((attr (xml-node-attributes node)))
+                                          (insert (propertize (format "%s: " elem)
+                                                              'face 'font-lock-type-face))
+                                          (insert (propertize (format "%s\n" (cdr (assq 'name attr)))
+                                                              'face 'boost-test-common-face)))))))
+
                         (mapcar (lambda (x) (boost-test--parse-log-node x buffer)) children)))))
 
 
@@ -113,8 +163,9 @@
           (attr (xml-node-attributes (car (xml-get-children node 'TestSuite))))
           (attr-count 0))
 
-      (insert (format "|%s|\n" (make-string 60 ?-)))
-      (insert (format "%s %S result summary:" (car root) (cdr (assq 'name attr))))
+      (insert (propertize
+               (format "%s %S result summary:" (car root) (cdr (assq 'name attr)))
+               'face 'bold))
 	  (center-line)
       (insert (format "\n|%s|\n" (make-string 60 ?-)))
 
@@ -122,9 +173,54 @@
 		  (let ((identifier (car (elt attr attr-count)))
 				(value (cdr (elt attr attr-count))))
 			(cond ((string= "name" identifier) nil)
+                  ((string= "result" identifier) (insert (format "| %-20s | %-35s |\n"
+                                                                 (propertize (format "%s:" identifier)
+                                                                             'face 'font-lock-type-face)
+                                                                 (if (string= "failed" value)
+                                                                     (propertize (format "%s" (upcase value))
+                                                                                 'face 'boost-test-error-face)
+                                                                   (propertize (format "%s" (upcase value))
+                                                                               'face 'boost-test-success-face)))))
+                  ((string= "assertions_passed" identifier) (insert (format "| %-20s | %-35s |\n"
+                                                                 (propertize (format "%s:" identifier)
+                                                                             'face 'font-lock-type-face)
+                                                                 (if (> (string-to-number value) 0)
+                                                                     (propertize (format "%s" value)
+                                                                                 'face 'boost-test-success-face)
+                                                                   (format "%s" value)))))
+                  ((string= "assertions_failed" identifier) (insert (format "| %-20s | %-35s |\n"
+                                                                 (propertize (format "%s:" identifier)
+                                                                             'face 'font-lock-type-face)
+                                                                 (if (> (string-to-number value) 0)
+                                                                     (propertize (format "%s" value)
+                                                                                 'face 'boost-test-error-face)
+                                                                   (format "%s" value)))))
+                  ((string= "test_cases_passed" identifier) (insert (format "| %-20s | %-35s |\n"
+                                                                 (propertize (format "%s:" identifier)
+                                                                             'face 'font-lock-type-face)
+                                                                 (if (> (string-to-number value) 0)
+                                                                     (propertize (format "%s" value)
+                                                                                 'face 'boost-test-success-face)
+                                                                   (format "%s" value)))))
+                  ((string= "test_cases_failed" identifier) (insert (format "| %-20s | %-35s |\n"
+                                                                 (propertize (format "%s:" identifier)
+                                                                             'face 'font-lock-type-face)
+                                                                 (if (> (string-to-number value) 0)
+                                                                     (propertize (format "%s" value)
+                                                                                 'face 'boost-test-error-face)
+                                                                   (format "%s" value)))))
+                  ((string= "test_cases_aborted" identifier) (insert (format "| %-20s | %-35s |\n"
+                                                                 (propertize (format "%s:" identifier)
+                                                                             'face 'font-lock-type-face)
+                                                                 (if (> (string-to-number value) 0)
+                                                                     (propertize (format "%s" value)
+                                                                                 'face 'boost-test-error-face)
+                                                                   (format "%s" value)))))
+
 				  (t (insert (format "| %-20s | %-35s |\n"
-									 (format "%s:" identifier)
-									 value))))
+                                     (propertize (format "%s:" identifier)
+                                                 'face 'font-lock-type-face)
+                                     value))))
 			(setq attr-count (1+ attr-count))))
 
       (insert (format "|%s|\n" (make-string 60 ?-))))))
