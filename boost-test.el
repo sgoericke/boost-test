@@ -32,6 +32,10 @@
   "*Face used to highlight successful conditions..."
   :group 'Boost.Test :group 'Convenience :group 'Help :group 'faces)
 
+(defface boost-test-warning-face '((t (:foreground "gold")))
+  "*Face used to highlight warning conditions..."
+  :group 'Boost.Test :group 'Convenience :group 'Help :group 'faces)
+
 (defface boost-test-common-face '((t (:inherit 'font-lock-variable-name-face)))
   "*Face used to highlight non-specific stuff..."
   :group 'Boost.Test :group 'Convenience :group 'Help :group 'faces)
@@ -206,6 +210,13 @@
                                                                           (if (> (string-to-number value) 0)
                                                                               (propertize (format "%s" value)
                                                                                           'face 'boost-test-error-face)
+                                                                            (format "%s" value)))))
+                ((string= "expected_failures" identifier) (insert (format "| %-20s | %-35s |\n"
+                                                                          (propertize (format "%s:" identifier)
+                                                                                      'face 'font-lock-type-face)
+                                                                          (if (> (string-to-number value) 0)
+                                                                              (propertize (format "%s" value)
+                                                                                          'face 'boost-test-warning-face)
                                                                             (format "%s" value)))))
                 ((string= "test_cases_passed" identifier) (insert (format "| %-20s | %-35s |\n"
                                                                           (propertize (format "%s:" identifier)
