@@ -48,7 +48,7 @@
 
 (defun boost-test--read-test-command (command)
   "Read which program to start"
-  (read-shell-command "Run test program:" command
+  (read-shell-command "Run test program: " command
                       (if (equal (car boost-test--command-history) command)
                           '(boost-test--command-history . 1)
                         'boost-test--command-history)))
@@ -59,7 +59,7 @@
   "Runs the test specified"
   (interactive)
   (when (equal boost-test-program nil)
-    (setq boost-test-program (read-file-name "Specify test program:")))
+    (setq boost-test-program (read-file-name "Specify test program: ")))
 
   (let ((test-prog (boost-test--read-test-command (eval boost-test-program)))
         (buf (get-buffer-create (generate-new-buffer-name "*test-result*"))))
@@ -153,6 +153,16 @@
                                                                  (insert (format "[%s:%s]\n"
                                                                                  (cdr (assq 'file attr))
                                                                                  (cdr (assq 'line attr))))))
+
+                              ((string= "Warning" elem) (let ((attr (xml-node-attributes node)))
+                                                             (insert (propertize (format "%s: " elem)
+                                                                                 'face 'boost-test-warning-face))
+                                                             (insert (propertize (format "%s "(car (last node)))
+                                                                                 'face 'boost-test-common-face))
+                                                             (insert (propertize (format "[%s:%s]\n"
+                                                                                         (cdr (assq 'file attr))
+                                                                                         (cdr (assq 'line attr)))
+                                                                                 'face 'boost-test-common-face))))
 
                               (t (cond ((stringp (car (last node)))
                                         (insert (propertize (format "%s: " elem)
