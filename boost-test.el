@@ -23,6 +23,7 @@
 ;; "boost-test--<descriptive-name>".
 
 (eval-when-compile (require 'cl))
+(require 'xml)
 
 (defgroup boost-test nil
   "Mode for boost-unittest framework"
@@ -40,7 +41,7 @@
   "*Face used to highlight warning conditions..."
   :group 'boost-test :group 'Help :group 'faces)
 
-(defface boost-test-common-face '((t (:inherit 'font-lock-variable-name-face)))
+(defface boost-test-common-face '((t (:inherit 'default)))
   "*Face used to highlight non-specific stuff..."
   :group 'boost-test :group 'Help :group 'faces)
 
@@ -52,6 +53,18 @@
   "List of additional environment variables which need to be set prior running the tests"
   :type '(alist :key-type string :value-type string)
   :group 'boost-test)
+
+(defvar boost-test-mode-map
+  (let ((map (make-keymap)))
+    (suppress-keymap map t)
+    (define-key map (kbd "q") 'boost-test-quit-window)
+    map))
+
+;;---------------------------------------------------------------------------------------------------------------------
+(defun boost-test-quit-window ()
+  (interactive)
+  (quit-window t))
+
 
 (defun boost-test--set-env ()
   (loop for var in boost-test-env-vars do
@@ -70,8 +83,9 @@
 ;;---------------------------------------------------------------------------------------------------------------------
 (defun boost-test-run ()
   "Runs the test specified"
-  (boost-test--set-env)
   (interactive)
+  (boost-test--set-env)
+
   (when (equal boost-test-program nil)
     (setq boost-test-program (read-file-name "Specify test program: ")))
 
@@ -84,8 +98,7 @@
     (let ((proc (start-process test-prog buf test-prog "--output_format=XML --log_level=all --repor_level=detailed")))
       (let ((sentinel (lambda (process signal)
                         (unwind-protect
-                            (save-excursion
-                              (set-buffer (process-buffer process))
+                            (with-current-buffer (process-buffer process)
                               (boost-test--process-result (buffer-substring 1 (point-max))))
                           (kill-buffer (process-buffer process))))))
         (set-process-sentinel proc sentinel)))))
@@ -93,7 +106,7 @@
 ;;---------------------------------------------------------------------------------------------------------------------
 (defun boost-test--process-result (result)
 
-  (let* ((buf (get-buffer-create "*boost::test results*"))
+  (let* ((buf (get-buffer-create "boost::test results"))
          (root (with-temp-buffer
                  (insert (concat "<Root>" result "</Root>"))
                  (xml-parse-region (point-min) (point-max))))
@@ -145,22 +158,33 @@
                                  (insert (propertize (format "%s: " elem)
                                                      'face 'boost-test-error-face))
                                  (insert (propertize (format "%s "(car (last node)))
-                                                     'face 'boost-test-common-face))
+                                                     'face 'default))
                                  (insert (propertize (format "[%s:%s]\n"
                                                              (cdr (assq 'file attr))
                                                              (cdr (assq 'line attr)))
-                                                     'face 'boost-test-common-face))))
+                                                     'face 'default))))
 
                               ((string= "FatalError" elem)
                                (let ((attr (xml-node-attributes node)))
                                  (insert (propertize (format "%s: " elem)
                                                      'face 'boost-test-error-face))
                                  (insert (propertize (format "%s "(car (last node)))
-                                                     'face 'boost-test-common-face))
+                                                     'face 'default))
                                  (insert (propertize (format "[%s:%s]\n"
                                                              (cdr (assq 'file attr))
                                                              (cdr (assq 'line attr)))
-                                                     'face 'boost-test-common-face))))
+                                                     'face 'default))))
+
+                              ((string= "Info" elem) nil)
+                               ;; (let ((attr (xml-node-attributes node)))
+                               ;;   (insert (propertize (format "%s: " elem)
+                               ;;                       'face 'font-lock-type-face))
+                               ;;   (insert (propertize (format "%s "(car (last node)))
+                               ;;                       'face 'default))
+                               ;;   (insert (propertize (format "[%s:%s]\n"
+                               ;;                               (cdr (assq 'file attr))
+                               ;;                               (cdr (assq 'line attr)))
+                               ;;                       'face 'default))))
 
 
                               ((string= "LastCheckpoint" elem)
@@ -172,36 +196,44 @@
                                                  (cdr (assq 'file attr))
                                                  (cdr (assq 'line attr))))))
 
-                              ((string= "Warning" elem)
-                               (let ((attr (xml-node-attributes node)))
-                                 (insert (propertize (format "%s: " elem)
-                                                     'face 'boost-test-warning-face))
-                                 (insert (propertize (format "%s "(car (last node)))
-                                                     'face 'boost-test-common-face))
-                                 (insert (propertize (format "[%s:%s]\n"
-                                                             (cdr (assq 'file attr))
-                                                             (cdr (assq 'line attr)))
-                                                     'face 'boost-test-common-face))))
+                              ((string= "Message" elem) nil)
+                               ;; (let ((attr (xml-node-attributes node)))
+                               ;;   (insert (propertize (format "\n%s: " elem)
+                               ;;                       'face 'font-lock-type-face))
+                               ;;   (insert (propertize (format "%s\n" (cdr (assq 'name attr)))
+                               ;;                       'face 'default))))
 
                               ((string= "TestCase" elem)
                                (let ((attr (xml-node-attributes node)))
                                  (insert (propertize (format "\n%s: " elem)
                                                      'face 'font-lock-type-face))
                                  (insert (propertize (format "%s\n" (cdr (assq 'name attr)))
-                                                     'face 'boost-test-common-face))))
+                                                     'face 'default))))
+
+                              ((string= "Warning" elem)
+                               (let ((attr (xml-node-attributes node)))
+                                 (insert (propertize (format "%s: " elem)
+                                                     'face 'boost-test-warning-face))
+                                 (insert (propertize (format "%s "(car (last node)))
+                                                     'face 'default))
+                                 (insert (propertize (format "[%s:%s]\n"
+                                                             (cdr (assq 'file attr))
+                                                             (cdr (assq 'line attr)))
+                                                     'face 'default))))
+
 
                               (t
                                (cond ((stringp (car (last node)))
                                       (insert (propertize (format "%s: " elem)
                                                           'face 'font-lock-type-face))
                                       (insert (propertize (format "%s\n" (car (last node)))
-                                                          'face 'boost-test-common-face)))
+                                                          'face 'default)))
                                      (t
                                       (let ((attr (xml-node-attributes node)))
                                         (insert (propertize (format "%s: " elem)
                                                             'face 'font-lock-type-face))
                                         (insert (propertize (format "%s\n" (cdr (assq 'name attr)))
-                                                            'face 'boost-test-common-face)))))))
+                                                            'face 'default)))))))
 
                         (mapcar (lambda (x) (boost-test--parse-log-node x buffer)) children)))))
 
@@ -303,7 +335,6 @@
 ;; remove CR (^M) from display ----------------------------------------------------------------------------------------
 (defun boost-test-mode--remove-dos-eol ()
   "Do not show ^M in files containing mixed UNIX and DOS line endings."
-  (interactive)
   (setq buffer-display-table (make-display-table))
   (aset buffer-display-table ?\^M []))
 
@@ -313,6 +344,7 @@
   (kill-all-local-variables)
   (setq major-mode 'boost-test-mode)
   (setq mode-name "Boost.Test")
+  (use-local-map boost-test-mode-map)
   (boost-test-mode--remove-dos-eol)
   (run-mode-hooks 'boost-test-mode-hook))
 
